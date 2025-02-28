@@ -28,7 +28,7 @@ public class Main {
   }
 
   static String decodeBencode(String bencodedString) {
-    if (Character.isDigit(bencodedString.charAt(0))) {
+    if (Character.isDigit(bencodedString.charAt(0)) || (bencodedString.charAt(0) == '-' && Character.isDigit(bencodedString.charAt(1)))) {
       int firstColonIndex = 0;
       for(int i = 0; i < bencodedString.length(); i++) { 
         if(bencodedString.charAt(i) == ':') {
@@ -38,8 +38,11 @@ public class Main {
       }
       int length = Integer.parseInt(bencodedString.substring(0, firstColonIndex));
       return bencodedString.substring(firstColonIndex+1, firstColonIndex+1+length);
+    } else if (bencodedString.startsWith("i") && bencodedString.endsWith("e")) {
+      String integerString = bencodedString.substring(1, bencodedString.length() - 1);
+      return String.valueOf(Integer.parseInt(integerString));
     } else {
-      throw new RuntimeException("Only strings are supported at the moment");
+      throw new RuntimeException("Only strings and integers are supported at the moment");
     }
   }
   
