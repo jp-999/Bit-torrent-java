@@ -42,7 +42,7 @@ public class Main {
       String integerString = bencodedString.substring(1, bencodedString.length() - 1);
       return String.valueOf(Long.parseLong(integerString));
     } else {
-      throw new RuntimeException("Only strings and integers are supported at the moment");
+      return "\"" + bencodedString + "\"";
     }
   }
   
