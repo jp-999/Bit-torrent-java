@@ -37,7 +37,7 @@ public class Main {
         }
       }
       int length = Integer.parseInt(bencodedString.substring(0, firstColonIndex));
-      return "\\\"" + bencodedString.substring(firstColonIndex + 1, firstColonIndex + 1 + length) + "\\\"";
+      return "\"" + bencodedString.substring(firstColonIndex + 1, firstColonIndex + 1 + length) + "\"";
     } else if (bencodedString.startsWith("i")) {
       return Long.parseLong(bencodedString.substring(1, bencodedString.indexOf("e")));
     } else {
