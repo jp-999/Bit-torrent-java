@@ -14,7 +14,7 @@ public class Main {
        String bencodedValue = args[1];
        String decoded;
        try {
-         decoded = decodeBencode(bencodedValue);
+         decoded = String.valueOf(decodeBencode(bencodedValue));
        } catch(RuntimeException e) {
          System.out.println(e.getMessage());
          return;
