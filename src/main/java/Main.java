@@ -30,44 +30,54 @@ public class Main {
   }
 
   static Object decodeBencode(String bencodedString) {
-    if (Character.isDigit(bencodedString.charAt(0))) {
-      int firstColonIndex = 0;
-      for (int i = 0; i < bencodedString.length(); i++) {
-        if (bencodedString.charAt(i) == ':') {
-          firstColonIndex = i;
-          break;
-        }
+    return new BencodeDecoder(bencodedString).decode();
+  }
+
+  static class BencodeDecoder {
+    private String encodedValue;
+    private int current = 0;
+
+    public BencodeDecoder(String encodedValue) {
+      this.encodedValue = encodedValue;
+    }
+
+    public Object decode() {
+      if (Character.isDigit(encodedValue.charAt(current))) {
+        return decodeString();
       }
-      int length = Integer.parseInt(bencodedString.substring(0, firstColonIndex));
-      return bencodedString.substring(firstColonIndex + 1, firstColonIndex + 1 + length);
-    } else if (bencodedString.startsWith("i")) {
-      return Long.parseLong(bencodedString.substring(1, bencodedString.indexOf("e")));
-    } else if (bencodedString.startsWith("l")) {
-      List<Object> list = new ArrayList<>();
-      int index = 1; // Start after 'l'
-      // Check for empty list case
-      if (bencodedString.charAt(index) == 'e') {
-        return list; // Return empty list
+      if (encodedValue.charAt(current) == 'i') {
+        return decodeInteger();
       }
-      while (bencodedString.charAt(index) != 'e') {
-        String remainingString = bencodedString.substring(index);
-        Object element = decodeBencode(remainingString);
-        list.add(element);
-        // Update index to skip past the decoded element
-        if (Character.isDigit(remainingString.charAt(0))) {
-          // For strings: skip past the length prefix, colon, and string content
-          int colonIndex = remainingString.indexOf(':');
-          int strLength = Integer.parseInt(remainingString.substring(0, colonIndex));
-          index += colonIndex + 1 + strLength;
-        } else if (remainingString.charAt(0) == 'i') {
-          // For integers: skip to the next 'e' and beyond
-          index += remainingString.indexOf('e') + 1;
-        }
+      if (encodedValue.charAt(current) == 'l') {
+        return decodeList();
       }
-      return list;
-    } else {
       throw new RuntimeException("Only strings and lists are supported at the moment");
     }
+
+    private String decodeString() {
+      int delimiterIndex = encodedValue.indexOf(':', current);
+      int length = Integer.parseInt(encodedValue.substring(current, delimiterIndex));
+      int start = delimiterIndex + 1;
+      int end = start + length;
+      current = end;
+      return encodedValue.substring(start, end);
+    }
+
+    private Long decodeInteger() {
+      int start = current + 1;
+      int end = encodedValue.indexOf('e', start);
+      current = end + 1;
+      return Long.parseLong(encodedValue.substring(start, end));
+    }
+
+    private List<Object> decodeList() {
+      List<Object> list = new ArrayList<>();
+      current++; // Skip 'l'
+      while (encodedValue.charAt(current) != 'e') {
+        list.add(decode());
+      }
+      current++; // Skip 'e'
+      return list;
+    }
   }
-  
 }
