@@ -50,17 +50,21 @@ public class Main {
         return list; // Return empty list
       }
       while (bencodedString.charAt(index) != 'e') {
-        Object element = decodeBencode(bencodedString.substring(index));
+        String remainingString = bencodedString.substring(index);
+        Object element = decodeBencode(remainingString);
         list.add(element);
-        // Update index to the end of the decoded element
-        if (element instanceof String) {
-          int length = ((String) element).length();
-          index += length + 2; // Length + ':' + 'e'
-        } else if (element instanceof Long) {
-          index = bencodedString.indexOf("e", index) + 1; // Move past 'e'
+        // Update index to skip past the decoded element
+        if (Character.isDigit(remainingString.charAt(0))) {
+          // For strings: skip past the length prefix, colon, and string content
+          int colonIndex = remainingString.indexOf(':');
+          int strLength = Integer.parseInt(remainingString.substring(0, colonIndex));
+          index += colonIndex + 1 + strLength;
+        } else if (remainingString.charAt(0) == 'i') {
+          // For integers: skip to the next 'e' and beyond
+          index += remainingString.indexOf('e') + 1;
         }
       }
-      return list; // Return the decoded list
+      return list;
     } else {
       throw new RuntimeException("Only strings and lists are supported at the moment");
     }
