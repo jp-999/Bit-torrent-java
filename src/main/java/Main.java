@@ -48,10 +48,17 @@ public class Main {
         return list;
     } else if (Character.isDigit(bencodedString.charAt(0))) {
         int firstColonIndex = bencodedString.indexOf(':');
+        if (firstColonIndex == -1) {
+            throw new RuntimeException("Invalid bencoded string format");
+        }
         int length = Integer.parseInt(bencodedString.substring(0, firstColonIndex));
         return "\"" + bencodedString.substring(firstColonIndex + 1, firstColonIndex + 1 + length) + "\"";
     } else if (bencodedString.startsWith("i")) {
-        return Long.parseLong(bencodedString.substring(1, bencodedString.indexOf("e")));
+        int endIndex = bencodedString.indexOf("e", 1);
+        if (endIndex == -1) {
+            throw new RuntimeException("Invalid bencoded integer format");
+        }
+        return Long.parseLong(bencodedString.substring(1, endIndex));
     } else {
         throw new RuntimeException("Only strings and lists are supported at the moment");
     }
