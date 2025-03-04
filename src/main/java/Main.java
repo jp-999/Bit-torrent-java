@@ -33,7 +33,7 @@ public class Main {
     if (bencodedString.startsWith("l")) {
         List<Object> list = new ArrayList<>();
         int currentIndex = 1; // Start after 'l'
-        while (bencodedString.charAt(currentIndex) != 'e') {
+        while (currentIndex < bencodedString.length() && bencodedString.charAt(currentIndex) != 'e') {
             Object element = decodeBencode(bencodedString.substring(currentIndex));
             list.add(element);
             // Update currentIndex to the end of the decoded element
@@ -43,6 +43,8 @@ public class Main {
                 currentIndex += String.valueOf(element).length() + 2; // +2 for 'i' and 'e'
             }
         }
+        // Move past the 'e' character
+        currentIndex++;
         return list;
     } else if (Character.isDigit(bencodedString.charAt(0))) {
         int firstColonIndex = 0;
