@@ -38,22 +38,16 @@ public class Main {
             list.add(element);
             // Update currentIndex to the end of the decoded element
             if (element instanceof String) {
+                // Remove quotes when calculating length
                 currentIndex += ((String) element).length() + 2; // +2 for the quotes
             } else if (element instanceof Long) {
                 currentIndex += String.valueOf(element).length() + 2; // +2 for 'i' and 'e'
             }
         }
         // Move past the 'e' character
-        currentIndex++;
         return list;
     } else if (Character.isDigit(bencodedString.charAt(0))) {
-        int firstColonIndex = 0;
-        for (int i = 0; i < bencodedString.length(); i++) {
-            if (bencodedString.charAt(i) == ':') {
-                firstColonIndex = i;
-                break;
-            }
-        }
+        int firstColonIndex = bencodedString.indexOf(':');
         int length = Integer.parseInt(bencodedString.substring(0, firstColonIndex));
         return "\"" + bencodedString.substring(firstColonIndex + 1, firstColonIndex + 1 + length) + "\"";
     } else if (bencodedString.startsWith("i")) {
