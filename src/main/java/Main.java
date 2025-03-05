@@ -33,18 +33,26 @@ public class Main {
     if (bencodedString.startsWith("l")) {
         List<Object> list = new ArrayList<>();
         int currentIndex = 1; // Start after 'l'
+        
         while (currentIndex < bencodedString.length() && bencodedString.charAt(currentIndex) != 'e') {
             Object element = decodeBencode(bencodedString.substring(currentIndex));
             list.add(element);
+            
             // Update currentIndex to the end of the decoded element
             if (element instanceof String) {
-                // Remove quotes when calculating length
                 currentIndex += ((String) element).length() + 2; // +2 for the quotes
             } else if (element instanceof Long) {
                 currentIndex += String.valueOf(element).length() + 2; // +2 for 'i' and 'e'
             }
         }
+        
         // Move past the 'e' character
+        if (currentIndex < bencodedString.length() && bencodedString.charAt(currentIndex) == 'e') {
+            currentIndex++;
+        } else {
+            throw new RuntimeException("Invalid bencoded list format");
+        }
+        
         return list;
     } else if (Character.isDigit(bencodedString.charAt(0))) {
         int firstColonIndex = bencodedString.indexOf(':');
