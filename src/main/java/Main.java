@@ -60,6 +60,12 @@ public class Main {
             throw new RuntimeException("Invalid bencoded string format");
         }
         int length = Integer.parseInt(bencodedString.substring(0, firstColonIndex));
+        
+        // Ensure the length is valid
+        if (length < 0 || firstColonIndex + 1 + length > bencodedString.length()) {
+            throw new RuntimeException("Invalid bencoded string length");
+        }
+        
         return "\"" + bencodedString.substring(firstColonIndex + 1, firstColonIndex + 1 + length) + "\"";
     } else if (bencodedString.startsWith("i")) {
         int endIndex = bencodedString.indexOf("e", 1);
