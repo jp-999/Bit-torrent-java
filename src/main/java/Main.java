@@ -31,50 +31,62 @@ public class Main {
 
   static Object decodeBencode(String bencodedString) {
     if (bencodedString.startsWith("l")) {
+        // Handling a list: l<element1><element2>...e
         List<Object> list = new ArrayList<>();
-        int currentIndex = 1; // Start after 'l'
+        StringBuilder currentInput = new StringBuilder(bencodedString.substring(1)); // Remove the 'l'
         
-        while (currentIndex < bencodedString.length() && bencodedString.charAt(currentIndex) != 'e') {
-            Object element = decodeBencode(bencodedString.substring(currentIndex));
-            list.add(element);
-            
-            // Update currentIndex to the end of the decoded element
-            if (element instanceof String) {
-                currentIndex += ((String) element).length() + 2; // +2 for the quotes
-            } else if (element instanceof Long) {
-                currentIndex += String.valueOf(element).length() + 2; // +2 for 'i' and 'e'
+        while (currentInput.length() > 0 && currentInput.charAt(0) != 'e') {
+            // Decode the next element
+            if (Character.isDigit(currentInput.charAt(0))) {
+                // String element
+                int colonIndex = currentInput.indexOf(":");
+                int length = Integer.parseInt(currentInput.substring(0, colonIndex));
+                String value = currentInput.substring(colonIndex + 1, colonIndex + 1 + length);
+                list.add("\"" + value + "\"");
+                
+                // Remove the processed element
+                currentInput.delete(0, colonIndex + 1 + length);
+            } else if (currentInput.charAt(0) == 'i') {
+                // Integer element
+                int endIndex = currentInput.indexOf("e");
+                Long value = Long.parseLong(currentInput.substring(1, endIndex));
+                list.add(value);
+                
+                // Remove the processed element
+                currentInput.delete(0, endIndex + 1);
+            } else {
+                throw new RuntimeException("Unsupported element type in list");
             }
         }
         
-        // Move past the 'e' character
-        if (currentIndex < bencodedString.length() && bencodedString.charAt(currentIndex) == 'e') {
-            currentIndex++;
+        // Remove the ending 'e'
+        if (currentInput.length() > 0 && currentInput.charAt(0) == 'e') {
+            currentInput.deleteCharAt(0);
         } else {
-            throw new RuntimeException("Invalid bencoded list format");
+            throw new RuntimeException("Invalid list format, missing ending 'e'");
         }
         
         return list;
     } else if (Character.isDigit(bencodedString.charAt(0))) {
-        int firstColonIndex = bencodedString.indexOf(':');
-        if (firstColonIndex == -1) {
+        // Handling a string: <length>:<string>
+        int colonIndex = bencodedString.indexOf(":");
+        if (colonIndex == -1) {
             throw new RuntimeException("Invalid bencoded string format");
         }
-        int length = Integer.parseInt(bencodedString.substring(0, firstColonIndex));
-        
-        // Ensure the length is valid
-        if (length < 0 || firstColonIndex + 1 + length > bencodedString.length()) {
-            throw new RuntimeException("Invalid bencoded string length");
+        int length = Integer.parseInt(bencodedString.substring(0, colonIndex));
+        if (colonIndex + 1 + length > bencodedString.length()) {
+            throw new RuntimeException("Invalid string length");
         }
-        
-        return "\"" + bencodedString.substring(firstColonIndex + 1, firstColonIndex + 1 + length) + "\"";
-    } else if (bencodedString.startsWith("i")) {
-        int endIndex = bencodedString.indexOf("e", 1);
+        return "\"" + bencodedString.substring(colonIndex + 1, colonIndex + 1 + length) + "\"";
+    } else if (bencodedString.charAt(0) == 'i') {
+        // Handling an integer: i<number>e
+        int endIndex = bencodedString.indexOf("e");
         if (endIndex == -1) {
             throw new RuntimeException("Invalid bencoded integer format");
         }
         return Long.parseLong(bencodedString.substring(1, endIndex));
     } else {
-        throw new RuntimeException("Only strings and lists are supported at the moment");
+        throw new RuntimeException("Unsupported bencode type");
     }
   }
 
