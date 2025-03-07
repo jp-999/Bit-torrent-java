@@ -63,6 +63,17 @@ public class Main {
                 
                 // Remove the processed element
                 currentInput.delete(0, endIndex + 1);
+            } else if (currentInput.charAt(0) == 'l') {
+                // Nested list
+                int endIndex = findEndOfList(currentInput.toString());
+                if (endIndex == -1) {
+                    throw new RuntimeException("Invalid nested list format");
+                }
+                String nestedList = currentInput.substring(0, endIndex + 1);
+                list.add(decodeBencode(nestedList));
+                
+                // Remove the processed nested list
+                currentInput.delete(0, endIndex + 1);
             } else {
                 throw new RuntimeException("Unsupported element type in list");
             }
@@ -97,6 +108,22 @@ public class Main {
     } else {
         throw new RuntimeException("Unsupported bencode type");
     }
+  }
+
+  // Helper method to find the end of a nested list
+  private static int findEndOfList(String bencodedString) {
+    int depth = 0;
+    for (int i = 0; i < bencodedString.length(); i++) {
+        if (bencodedString.charAt(i) == 'l') {
+            depth++;
+        } else if (bencodedString.charAt(i) == 'e') {
+            depth--;
+            if (depth == 0) {
+                return i; // Found the end of the outermost list
+            }
+        }
+    }
+    return -1; // No matching end found
   }
 
 }
