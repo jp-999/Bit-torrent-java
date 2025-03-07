@@ -40,7 +40,13 @@ public class Main {
             if (Character.isDigit(currentInput.charAt(0))) {
                 // String element
                 int colonIndex = currentInput.indexOf(":");
+                if (colonIndex == -1) {
+                    throw new RuntimeException("Invalid bencoded string format");
+                }
                 int length = Integer.parseInt(currentInput.substring(0, colonIndex));
+                if (length < 0 || colonIndex + 1 + length > currentInput.length()) {
+                    throw new RuntimeException("Invalid string length");
+                }
                 String value = currentInput.substring(colonIndex + 1, colonIndex + 1 + length);
                 list.add("\"" + value + "\"");
                 
@@ -49,6 +55,9 @@ public class Main {
             } else if (currentInput.charAt(0) == 'i') {
                 // Integer element
                 int endIndex = currentInput.indexOf("e");
+                if (endIndex == -1) {
+                    throw new RuntimeException("Invalid bencoded integer format");
+                }
                 Long value = Long.parseLong(currentInput.substring(1, endIndex));
                 list.add(value);
                 
@@ -74,7 +83,7 @@ public class Main {
             throw new RuntimeException("Invalid bencoded string format");
         }
         int length = Integer.parseInt(bencodedString.substring(0, colonIndex));
-        if (colonIndex + 1 + length > bencodedString.length()) {
+        if (length < 0 || colonIndex + 1 + length > bencodedString.length()) {
             throw new RuntimeException("Invalid string length");
         }
         return "\"" + bencodedString.substring(colonIndex + 1, colonIndex + 1 + length) + "\"";
