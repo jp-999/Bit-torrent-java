@@ -1,4 +1,6 @@
 import com.google.gson.Gson;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
 public class Main {
@@ -8,16 +10,36 @@ public class Main {
         System.err.println("Logs from your program will appear here!");
 
         String command = args[0];
-        if ("decode".equals(command)) {
-            String bencodedValue = args[1];
+        if ("parse_torrent".equals(command)) {
+            String filePath = args[1];
+            byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
+
             Object decoded;
             try {
-                decoded = decodeBencode(bencodedValue, new int[]{0});
+                decoded = decodeBencode(new String(fileBytes), new int[]{0});
+                if (!(decoded instanceof Map)) {
+                    throw new RuntimeException("Invalid torrent file format.");
+                }
             } catch (RuntimeException e) {
                 System.out.println(e.getMessage());
                 return;
             }
-            System.out.println(gson.toJson(decoded));
+
+            Map<?, ?> torrentData = (Map<?, ?>) decoded;
+            String announce = (String) torrentData.get("announce");
+
+            Map<?, ?> info = (Map<?, ?>) torrentData.get("info");
+            if (info == null) {
+                System.out.println("Invalid torrent: Missing 'info' dictionary.");
+                return;
+            }
+            Long length = (Long) info.get("length");
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("announce", announce);
+            result.put("length", length);
+
+            System.out.println(gson.toJson(result));
         } else {
             System.out.println("Unknown command: " + command);
         }
@@ -27,32 +49,27 @@ public class Main {
         char firstChar = bencodedString.charAt(index[0]);
 
         if (firstChar == 'd') {
-            // Handling a dictionary: d<key1><value1>...e
-            index[0]++; // Skip 'd'
-            Map<String, Object> map = new TreeMap<>(); // TreeMap ensures lexicographical order
-            
+            index[0]++;
+            Map<String, Object> map = new TreeMap<>();
             while (bencodedString.charAt(index[0]) != 'e') {
-                // Keys must be strings
                 Object key = decodeBencode(bencodedString, index);
                 if (!(key instanceof String)) {
-                    throw new RuntimeException("Dictionary keys must be strings");
+                    throw new RuntimeException("Dictionary keys must be strings.");
                 }
                 Object value = decodeBencode(bencodedString, index);
                 map.put((String) key, value);
             }
-            index[0]++; // Skip 'e'
+            index[0]++;
             return map;
         } else if (firstChar == 'l') {
-            // Handling a list: l<element1><element2>...e
-            index[0]++; // Skip 'l'
+            index[0]++;
             List<Object> list = new ArrayList<>();
             while (bencodedString.charAt(index[0]) != 'e') {
                 list.add(decodeBencode(bencodedString, index));
             }
-            index[0]++; // Skip 'e'
+            index[0]++;
             return list;
         } else if (Character.isDigit(firstChar)) {
-            // Handling a string: <length>:<string>
             int colonIndex = bencodedString.indexOf(":", index[0]);
             int length = Integer.parseInt(bencodedString.substring(index[0], colonIndex));
             index[0] = colonIndex + 1;
@@ -60,13 +77,12 @@ public class Main {
             index[0] += length;
             return value;
         } else if (firstChar == 'i') {
-            // Handling an integer: i<number>e
             int endIndex = bencodedString.indexOf("e", index[0]);
             long value = Long.parseLong(bencodedString.substring(index[0] + 1, endIndex));
             index[0] = endIndex + 1;
             return value;
         } else {
-            throw new RuntimeException("Unsupported bencode type");
+            throw new RuntimeException("Unsupported bencode type.");
         }
     }
 }
