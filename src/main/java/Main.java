@@ -1,9 +1,7 @@
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
 
 public class Main {
     public static void main(String[] args) throws Exception {
@@ -20,8 +18,11 @@ public class Main {
             String filePath = args[1];
             byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
 
-            Map<String, Object> torrentData = (Map<String, Object>) decodeBencode(new String(fileBytes));
+            // Using a stream-based approach
+            InputStream inputStream = new ByteArrayInputStream(fileBytes);
+            Map<String, Object> torrentData = (Map<String, Object>) decodeBencode(inputStream);
 
+            // Extracting and printing the required information
             if (torrentData.containsKey("announce")) {
                 String announce = (String) torrentData.get("announce");
                 System.out.println("Tracker URL: " + announce);
@@ -40,101 +41,71 @@ public class Main {
         }
     }
 
-    static Object decodeBencode(String bencodedString) {
-        if (bencodedString.startsWith("d")) {
-            return decodeDictionary(bencodedString);
-        } else if (bencodedString.startsWith("l")) {
-            return decodeList(bencodedString);
-        } else if (bencodedString.startsWith("i")) {
-            return decodeInteger(bencodedString);
-        } else if (Character.isDigit(bencodedString.charAt(0))) {
-            return decodeString(bencodedString);
+    // Decode function that uses InputStream
+    private static Object decodeBencode(InputStream input) throws IOException {
+        int firstByte = input.read();
+        if (firstByte == 'd') {
+            return decodeDictionary(input);
+        } else if (firstByte == 'l') {
+            return decodeList(input);
+        } else if (firstByte == 'i') {
+            return decodeInteger(input);
+        } else if (Character.isDigit(firstByte)) {
+            return decodeString(input, firstByte);
         } else {
             throw new RuntimeException("Unsupported bencode type");
         }
     }
 
-    private static Map<String, Object> decodeDictionary(String bencodedString) {
+    private static Map<String, Object> decodeDictionary(InputStream input) throws IOException {
         Map<String, Object> map = new TreeMap<>();
-        int index = 1;
+        while (true) {
+            int nextByte = input.read();
+            if (nextByte == 'e') break; // End of dictionary
 
-        while (index < bencodedString.length() && bencodedString.charAt(index) != 'e') {
-            Object key = decodeString(bencodedString.substring(index));
-            int keyLength = getEncodedLength(bencodedString.substring(index));
-            index += keyLength;
-
-            if (index >= bencodedString.length()) break;
-
-            Object value = decodeBencode(bencodedString.substring(index));
-            int valueLength = getEncodedLength(bencodedString.substring(index));
-            index += valueLength;
-
-            map.put((String) key, value);
+            input.unread(nextByte); // Push back the byte for decoding
+            String key = (String) decodeBencode(input);
+            Object value = decodeBencode(input);
+            map.put(key, value);
         }
-
         return map;
     }
 
-    private static List<Object> decodeList(String bencodedString) {
+    private static List<Object> decodeList(InputStream input) throws IOException {
         List<Object> list = new ArrayList<>();
-        int index = 1;
+        while (true) {
+            int nextByte = input.read();
+            if (nextByte == 'e') break; // End of list
 
-        while (index < bencodedString.length() && bencodedString.charAt(index) != 'e') {
-            Object element = decodeBencode(bencodedString.substring(index));
-            int elementLength = getEncodedLength(bencodedString.substring(index));
-            index += elementLength;
-            list.add(element);
+            input.unread(nextByte); // Push back the byte for decoding
+            list.add(decodeBencode(input));
         }
-
         return list;
     }
 
-    private static Long decodeInteger(String bencodedString) {
-        int endIndex = bencodedString.indexOf("e");
-        if (endIndex == -1) throw new RuntimeException("Invalid integer format");
-        return Long.parseLong(bencodedString.substring(1, endIndex));
+    private static long decodeInteger(InputStream input) throws IOException {
+        StringBuilder number = new StringBuilder();
+        while (true) {
+            int nextByte = input.read();
+            if (nextByte == 'e') break; // End of integer
+            number.append((char) nextByte);
+        }
+        return Long.parseLong(number.toString());
     }
 
-    private static String decodeString(String bencodedString) {
-        int colonIndex = bencodedString.indexOf(":");
-        if (colonIndex == -1) throw new RuntimeException("Invalid string format");
+    private static String decodeString(InputStream input, int firstByte) throws IOException {
+        // Read length of the string
+        StringBuilder lengthBuilder = new StringBuilder();
+        lengthBuilder.append((char) firstByte); // First byte already read
 
-        int length;
-        try {
-            length = Integer.parseInt(bencodedString.substring(0, colonIndex));
-        } catch (NumberFormatException e) {
-            throw new RuntimeException("Invalid length in bencoded string");
+        while (true) {
+            int nextByte = input.read();
+            if (nextByte == ':') break; // End of length specifier
+            lengthBuilder.append((char) nextByte);
         }
 
-        if (colonIndex + 1 + length > bencodedString.length()) {
-            throw new RuntimeException("String length out of bounds");
-        }
-
-        return bencodedString.substring(colonIndex + 1, colonIndex + 1 + length);
-    }
-
-    private static int getEncodedLength(String bencodedString) {
-        if (bencodedString.startsWith("d") || bencodedString.startsWith("l")) {
-            int depth = 0;
-            for (int i = 0; i < bencodedString.length(); i++) {
-                if (bencodedString.charAt(i) == 'd' || bencodedString.charAt(i) == 'l') depth++;
-                if (bencodedString.charAt(i) == 'e') depth--;
-                if (depth == 0) return i + 1;
-            }
-        } else if (bencodedString.startsWith("i")) {
-            return bencodedString.indexOf("e") + 1;
-        } else if (Character.isDigit(bencodedString.charAt(0))) {
-            int colonIndex = bencodedString.indexOf(":");
-            if (colonIndex == -1) throw new RuntimeException("Invalid string format");
-
-            int length = Integer.parseInt(bencodedString.substring(0, colonIndex));
-            if (colonIndex + 1 + length > bencodedString.length()) {
-                throw new RuntimeException("Encoded string length out of bounds");
-            }
-
-            return colonIndex + 1 + length;
-        }
-
-        throw new RuntimeException("Invalid encoded format");
+        int length = Integer.parseInt(lengthBuilder.toString());
+        byte[] strBytes = input.readNBytes(length); // Read exact number of bytes
+        return new String(strBytes);
     }
 }
