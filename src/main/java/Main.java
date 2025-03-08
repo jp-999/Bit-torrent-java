@@ -19,7 +19,7 @@ public class Main {
             byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
 
             // Using a stream-based approach
-            InputStream inputStream = new ByteArrayInputStream(fileBytes);
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(fileBytes);
             Map<String, Object> torrentData = (Map<String, Object>) decodeBencode(inputStream);
 
             // Extracting and printing the required information
@@ -42,7 +42,7 @@ public class Main {
     }
 
     // Decode function that uses InputStream
-    private static Object decodeBencode(InputStream input) throws IOException {
+    private static Object decodeBencode(ByteArrayInputStream input) throws IOException {
         int firstByte = input.read();
         if (firstByte == 'd') {
             return decodeDictionary(input);
@@ -57,13 +57,13 @@ public class Main {
         }
     }
 
-    private static Map<String, Object> decodeDictionary(InputStream input) throws IOException {
+    private static Map<String, Object> decodeDictionary(ByteArrayInputStream input) throws IOException {
         Map<String, Object> map = new TreeMap<>();
         while (true) {
             int nextByte = input.read();
             if (nextByte == 'e') break; // End of dictionary
 
-            input.unread(nextByte); // Push back the byte for decoding
+            input.reset();
             String key = (String) decodeBencode(input);
             Object value = decodeBencode(input);
             map.put(key, value);
@@ -71,19 +71,19 @@ public class Main {
         return map;
     }
 
-    private static List<Object> decodeList(InputStream input) throws IOException {
+    private static List<Object> decodeList(ByteArrayInputStream input) throws IOException {
         List<Object> list = new ArrayList<>();
         while (true) {
             int nextByte = input.read();
             if (nextByte == 'e') break; // End of list
 
-            input.unread(nextByte); // Push back the byte for decoding
+            input.reset();
             list.add(decodeBencode(input));
         }
         return list;
     }
 
-    private static long decodeInteger(InputStream input) throws IOException {
+    private static long decodeInteger(ByteArrayInputStream input) throws IOException {
         StringBuilder number = new StringBuilder();
         while (true) {
             int nextByte = input.read();
@@ -93,7 +93,7 @@ public class Main {
         return Long.parseLong(number.toString());
     }
 
-    private static String decodeString(InputStream input, int firstByte) throws IOException {
+    private static String decodeString(ByteArrayInputStream input, int firstByte) throws IOException {
         // Read length of the string
         StringBuilder lengthBuilder = new StringBuilder();
         lengthBuilder.append((char) firstByte); // First byte already read
@@ -105,7 +105,14 @@ public class Main {
         }
 
         int length = Integer.parseInt(lengthBuilder.toString());
-        byte[] strBytes = input.readNBytes(length); // Read exact number of bytes
+        byte[] strBytes = new byte[length];
+
+        // Ensure we read exactly 'length' bytes
+        int bytesRead = input.read(strBytes);
+        if (bytesRead != length) {
+            throw new IOException("Unexpected end of stream");
+        }
+
         return new String(strBytes);
     }
 }
