@@ -10,13 +10,13 @@ public class Main {
         System.err.println("Logs from your program will appear here!");
 
         String command = args[0];
-        if ("info".equals(command)) {  // Fix: changed from "parse_torrent" to "info"
+        if ("info".equals(command)) {
             String filePath = args[1];
             byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
 
             Object decoded;
             try {
-                decoded = decodeBencode(new String(fileBytes), new int[]{0});
+                decoded = decodeBencode(fileBytes, new int[]{0});
                 if (!(decoded instanceof Map)) {
                     throw new RuntimeException("Invalid torrent file format.");
                 }
@@ -35,7 +35,7 @@ public class Main {
             }
             Long length = (Long) info.get("length");
 
-            // Fix: Print expected format
+            // Expected output format
             System.out.println("Tracker URL: " + announce);
             System.out.println("File length: " + length);
         } else {
@@ -43,44 +43,84 @@ public class Main {
         }
     }
 
-    static Object decodeBencode(String bencodedString, int[] index) {
-        char firstChar = bencodedString.charAt(index[0]);
+    static Object decodeBencode(byte[] bencodedBytes, int[] index) {
+        if (index[0] >= bencodedBytes.length) {
+            throw new RuntimeException("Unexpected end of data");
+        }
+
+        char firstChar = (char) bencodedBytes[index[0]];
 
         if (firstChar == 'd') {
             index[0]++;
             Map<String, Object> map = new TreeMap<>();
-            while (bencodedString.charAt(index[0]) != 'e') {
-                Object key = decodeBencode(bencodedString, index);
+            while (index[0] < bencodedBytes.length && (char) bencodedBytes[index[0]] != 'e') {
+                Object key = decodeBencode(bencodedBytes, index);
                 if (!(key instanceof String)) {
                     throw new RuntimeException("Dictionary keys must be strings.");
                 }
-                Object value = decodeBencode(bencodedString, index);
+                Object value = decodeBencode(bencodedBytes, index);
                 map.put((String) key, value);
+            }
+            if (index[0] >= bencodedBytes.length) {
+                throw new RuntimeException("Unexpected end of dictionary");
             }
             index[0]++;
             return map;
         } else if (firstChar == 'l') {
             index[0]++;
             List<Object> list = new ArrayList<>();
-            while (bencodedString.charAt(index[0]) != 'e') {
-                list.add(decodeBencode(bencodedString, index));
+            while (index[0] < bencodedBytes.length && (char) bencodedBytes[index[0]] != 'e') {
+                list.add(decodeBencode(bencodedBytes, index));
+            }
+            if (index[0] >= bencodedBytes.length) {
+                throw new RuntimeException("Unexpected end of list");
             }
             index[0]++;
             return list;
         } else if (Character.isDigit(firstChar)) {
-            int colonIndex = bencodedString.indexOf(":", index[0]);
-            int length = Integer.parseInt(bencodedString.substring(index[0], colonIndex));
+            int colonIndex = findColonIndex(bencodedBytes, index[0]);
+            int length = parseInt(bencodedBytes, index[0], colonIndex);
             index[0] = colonIndex + 1;
-            String value = bencodedString.substring(index[0], index[0] + length);
+
+            if (index[0] + length > bencodedBytes.length) {
+                throw new RuntimeException("String length exceeds available data");
+            }
+
+            String value = new String(bencodedBytes, index[0], length);
             index[0] += length;
             return value;
         } else if (firstChar == 'i') {
-            int endIndex = bencodedString.indexOf("e", index[0]);
-            long value = Long.parseLong(bencodedString.substring(index[0] + 1, endIndex));
+            int endIndex = findEndIndex(bencodedBytes, index[0]);
+            long value = parseInt(bencodedBytes, index[0] + 1, endIndex);
             index[0] = endIndex + 1;
             return value;
         } else {
-            throw new RuntimeException("Unsupported bencode type.");
+            throw new RuntimeException("Unsupported bencode type at index " + index[0]);
         }
+    }
+
+    // Helper method to find the colon index for strings
+    private static int findColonIndex(byte[] data, int start) {
+        for (int i = start; i < data.length; i++) {
+            if (data[i] == ':') {
+                return i;
+            }
+        }
+        throw new RuntimeException("Invalid bencoded string format: missing colon");
+    }
+
+    // Helper method to find the end index for integers
+    private static int findEndIndex(byte[] data, int start) {
+        for (int i = start; i < data.length; i++) {
+            if (data[i] == 'e') {
+                return i;
+            }
+        }
+        throw new RuntimeException("Invalid bencoded integer format: missing 'e'");
+    }
+
+    // Helper method to safely parse an integer from bytes
+    private static int parseInt(byte[] data, int start, int end) {
+        return Integer.parseInt(new String(data, start, end - start));
     }
 }
