@@ -1,6 +1,5 @@
 import com.google.gson.Gson;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class Main {
     private static final Gson gson = new Gson();
@@ -27,7 +26,23 @@ public class Main {
     static Object decodeBencode(String bencodedString, int[] index) {
         char firstChar = bencodedString.charAt(index[0]);
 
-        if (firstChar == 'l') {
+        if (firstChar == 'd') {
+            // Handling a dictionary: d<key1><value1>...e
+            index[0]++; // Skip 'd'
+            Map<String, Object> map = new TreeMap<>(); // TreeMap ensures lexicographical order
+            
+            while (bencodedString.charAt(index[0]) != 'e') {
+                // Keys must be strings
+                Object key = decodeBencode(bencodedString, index);
+                if (!(key instanceof String)) {
+                    throw new RuntimeException("Dictionary keys must be strings");
+                }
+                Object value = decodeBencode(bencodedString, index);
+                map.put((String) key, value);
+            }
+            index[0]++; // Skip 'e'
+            return map;
+        } else if (firstChar == 'l') {
             // Handling a list: l<element1><element2>...e
             index[0]++; // Skip 'l'
             List<Object> list = new ArrayList<>();
