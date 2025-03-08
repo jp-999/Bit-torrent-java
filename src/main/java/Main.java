@@ -10,7 +10,7 @@ public class Main {
         System.err.println("Logs from your program will appear here!");
 
         String command = args[0];
-        if ("parse_torrent".equals(command)) {
+        if ("info".equals(command)) {  // Fix: changed from "parse_torrent" to "info"
             String filePath = args[1];
             byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
 
@@ -35,11 +35,9 @@ public class Main {
             }
             Long length = (Long) info.get("length");
 
-            Map<String, Object> result = new HashMap<>();
-            result.put("announce", announce);
-            result.put("length", length);
-
-            System.out.println(gson.toJson(result));
+            // Fix: Print expected format
+            System.out.println("Tracker URL: " + announce);
+            System.out.println("File length: " + length);
         } else {
             System.out.println("Unknown command: " + command);
         }
