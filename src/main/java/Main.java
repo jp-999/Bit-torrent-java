@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.Map;
 
 public class Main {
@@ -47,6 +48,31 @@ public class Main {
                 } else {
                     System.out.println("Length not found in torrent file.");
                 }
+            } else {
+                System.out.println("Info dictionary not found.");
+            }
+        } else if ("info-hash".equals(command)) {
+            byte[] torrentFile = Files.readAllBytes(Paths.get(args[1]));
+            Map<String, Object> torrentFileDecoded = bencode.decode(torrentFile, Type.DICTIONARY);
+
+            if (torrentFileDecoded.containsKey("info")) {
+                Map<String, Object> info = (Map<String, Object>) torrentFileDecoded.get("info");
+
+                // Re-bencode the `info` dictionary
+                byte[] bencodedInfo = bencode.encode(info);
+
+                // Compute SHA-1 hash
+                MessageDigest digest = MessageDigest.getInstance("SHA-1");
+                byte[] hashBytes = digest.digest(bencodedInfo);
+
+                // Convert hash to hexadecimal format
+                StringBuilder hexString = new StringBuilder();
+                for (byte b : hashBytes) {
+                    hexString.append(String.format("%02x", b));
+                }
+
+                // Print the info hash
+                System.out.printf("Info Hash: %s\n", hexString.toString());
             } else {
                 System.out.println("Info dictionary not found.");
             }
