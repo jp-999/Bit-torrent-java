@@ -1,28 +1,22 @@
-import com.google.gson.Gson;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.List;
+import java.util.ArrayList;
 
 public class Main {
-    private static final Gson gson = new Gson();
-
     public static void main(String[] args) throws Exception {
         System.err.println("Logs from your program will appear here!");
 
+        if (args.length < 2) {
+            System.out.println("Invalid command or missing arguments");
+            return;
+        }
+
         String command = args[0];
 
-        if ("decode".equals(command)) {
-            String bencodedValue = args[1];
-            String decoded;
-            try {
-                decoded = String.valueOf(decodeBencode(bencodedValue));
-            } catch (RuntimeException e) {
-                System.out.println(e.getMessage());
-                return;
-            }
-            System.out.println(decoded);
-
-        } else if ("info".equals(command)) {
+        if ("info".equals(command)) {
             String filePath = args[1];
             byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
 
@@ -38,10 +32,9 @@ public class Main {
 
                 if (infoDict.containsKey("length")) {
                     int length = ((Number) infoDict.get("length")).intValue();
-                    System.out.println("Length: " + length);  // Corrected output format
+                    System.out.println("Length: " + length);
                 }
             }
-
         } else {
             System.out.println("Unknown command: " + command);
         }
@@ -49,32 +42,32 @@ public class Main {
 
     static Object decodeBencode(String bencodedString) {
         if (bencodedString.startsWith("d")) {
-            // Handle dictionaries
             return decodeDictionary(bencodedString);
         } else if (bencodedString.startsWith("l")) {
-            // Handle lists
             return decodeList(bencodedString);
         } else if (bencodedString.startsWith("i")) {
-            // Handle integers
             return decodeInteger(bencodedString);
         } else if (Character.isDigit(bencodedString.charAt(0))) {
-            // Handle strings
             return decodeString(bencodedString);
         } else {
             throw new RuntimeException("Unsupported bencode type");
         }
     }
 
-    private static Object decodeDictionary(String bencodedString) {
-        Map<String, Object> map = new java.util.TreeMap<>();
-        int index = 1;  // Skip the initial 'd'
+    private static Map<String, Object> decodeDictionary(String bencodedString) {
+        Map<String, Object> map = new TreeMap<>();
+        int index = 1;
 
         while (index < bencodedString.length() && bencodedString.charAt(index) != 'e') {
             Object key = decodeString(bencodedString.substring(index));
-            index += getEncodedLength(bencodedString.substring(index));
+            int keyLength = getEncodedLength(bencodedString.substring(index));
+            index += keyLength;
+
+            if (index >= bencodedString.length()) break;
 
             Object value = decodeBencode(bencodedString.substring(index));
-            index += getEncodedLength(bencodedString.substring(index));
+            int valueLength = getEncodedLength(bencodedString.substring(index));
+            index += valueLength;
 
             map.put((String) key, value);
         }
@@ -82,29 +75,41 @@ public class Main {
         return map;
     }
 
-    private static Object decodeList(String bencodedString) {
-        java.util.List<Object> list = new java.util.ArrayList<>();
-        int index = 1;  // Skip 'l'
+    private static List<Object> decodeList(String bencodedString) {
+        List<Object> list = new ArrayList<>();
+        int index = 1;
 
         while (index < bencodedString.length() && bencodedString.charAt(index) != 'e') {
             Object element = decodeBencode(bencodedString.substring(index));
-            index += getEncodedLength(bencodedString.substring(index));
+            int elementLength = getEncodedLength(bencodedString.substring(index));
+            index += elementLength;
             list.add(element);
         }
 
         return list;
     }
 
-    private static Object decodeInteger(String bencodedString) {
+    private static Long decodeInteger(String bencodedString) {
         int endIndex = bencodedString.indexOf("e");
         if (endIndex == -1) throw new RuntimeException("Invalid integer format");
         return Long.parseLong(bencodedString.substring(1, endIndex));
     }
 
-    private static Object decodeString(String bencodedString) {
+    private static String decodeString(String bencodedString) {
         int colonIndex = bencodedString.indexOf(":");
         if (colonIndex == -1) throw new RuntimeException("Invalid string format");
-        int length = Integer.parseInt(bencodedString.substring(0, colonIndex));
+
+        int length;
+        try {
+            length = Integer.parseInt(bencodedString.substring(0, colonIndex));
+        } catch (NumberFormatException e) {
+            throw new RuntimeException("Invalid length in bencoded string");
+        }
+
+        if (colonIndex + 1 + length > bencodedString.length()) {
+            throw new RuntimeException("String length out of bounds");
+        }
+
         return bencodedString.substring(colonIndex + 1, colonIndex + 1 + length);
     }
 
@@ -120,9 +125,16 @@ public class Main {
             return bencodedString.indexOf("e") + 1;
         } else if (Character.isDigit(bencodedString.charAt(0))) {
             int colonIndex = bencodedString.indexOf(":");
+            if (colonIndex == -1) throw new RuntimeException("Invalid string format");
+
             int length = Integer.parseInt(bencodedString.substring(0, colonIndex));
+            if (colonIndex + 1 + length > bencodedString.length()) {
+                throw new RuntimeException("Encoded string length out of bounds");
+            }
+
             return colonIndex + 1 + length;
         }
+
         throw new RuntimeException("Invalid encoded format");
     }
 }
