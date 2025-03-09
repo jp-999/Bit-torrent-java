@@ -5,6 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class Main {
@@ -23,6 +25,11 @@ public class Main {
             System.out.println("Tracker URL: " + torrent.announce);
             System.out.println("Length: " + torrent.length);
             System.out.println("Info Hash: " + bytesToHex(torrent.infoHash));
+            System.out.println("Piece Length: " + torrent.pieceLength);
+            System.out.println("Piece Hashes:");
+            for (String pieceHash : torrent.pieceHashes) {
+                System.out.println(pieceHash);
+            }
         } else {
             System.out.println("Unknown command: " + command);
         }
@@ -41,6 +48,8 @@ class Torrent {
     public String announce;
     public long length;
     public byte[] infoHash;
+    public int pieceLength;
+    public List<String> pieceHashes = new ArrayList<>();
 
     public Torrent(byte[] bytes) throws NoSuchAlgorithmException {
         Bencode bencode = new Bencode(false); // Standard decoder
@@ -48,11 +57,22 @@ class Torrent {
 
         // Parse .torrent file
         Map<String, Object> root = bencode.decode(bytes, Type.DICTIONARY);
-        
+
         // Extract announce URL and info dictionary
         announce = (String) root.get("announce");
         Map<String, Object> info = (Map<String, Object>) root.get("info");
         length = (long) info.get("length");
+
+        // Extract piece length
+        pieceLength = (int) info.get("piece length");
+
+        // Extract and process pieces (20-byte SHA-1 hashes)
+        byte[] pieces = (byte[]) info.get("pieces");
+        for (int i = 0; i < pieces.length; i += 20) {
+            byte[] pieceHash = new byte[20];
+            System.arraycopy(pieces, i, pieceHash, 0, 20);
+            pieceHashes.add(bytesToHex(pieceHash));
+        }
 
         // Correctly bencode the "info" dictionary before hashing
         byte[] bencodedInfo = strictBencode.encode(info);
