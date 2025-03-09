@@ -46,13 +46,15 @@ class Torrent {
         Bencode bencode = new Bencode(false);  // Normal decoding
         Bencode strictBencode = new Bencode(true);  // Strict encoding
 
+        // Decode entire .torrent file
         Map<String, Object> root = bencode.decode(bytes, Type.DICTIONARY);
-        Map<String, Object> info = (Map<String, Object>) root.get("info");
-
+        
+        // Extract "announce" and "info" fields
         announce = (String) root.get("announce");
+        Map<String, Object> info = (Map<String, Object>) root.get("info");
         length = (long) info.get("length");
 
-        // Correctly encode the "info" dictionary
+        // Encode "info" dictionary exactly as it appears in the file
         byte[] bencodedInfo = strictBencode.encode(info);
 
         // Compute SHA-1 hash of the bencoded "info" dictionary
