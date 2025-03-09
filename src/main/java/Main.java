@@ -53,7 +53,6 @@ public class Main {
             System.out.println("Tracker URL: " + torrent.announce);
             System.out.println("Length: " + torrent.length);
             System.out.println("Info Hash: " + bytesToHex(torrent.infoHash));
-
         } else {
             System.out.println("Unknown command: " + command);
         }
@@ -85,7 +84,7 @@ class Torrent {
 
     public Torrent(byte[] bytes) throws NoSuchAlgorithmException {
         Bencode bencode = new Bencode(false);
-        Bencode sortedBencode = new Bencode(true); // Ensure correct sorting for hashing
+        Bencode sortedBencode = new Bencode(true); // Ensures correct key ordering
 
         Map<String, Object> root = bencode.decode(bytes, Type.DICTIONARY);
         Map<String, Object> info = (Map<String, Object>) root.get("info");
@@ -93,8 +92,11 @@ class Torrent {
         announce = (String) root.get("announce");
         length = (long) info.get("length");
 
-        // Compute SHA-1 hash of the bencoded `info` dictionary
+        // Ensure we're encoding only the "info" dictionary for hashing
+        byte[] bencodedInfo = sortedBencode.encode(info);
+
+        // Compute SHA-1 hash of the correctly bencoded "info" dictionary
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
-        infoHash = digest.digest(sortedBencode.encode(info));
+        infoHash = digest.digest(bencodedInfo);
     }
 }
