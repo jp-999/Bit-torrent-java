@@ -1,84 +1,139 @@
 import com.dampcake.bencode.Bencode;
 import com.dampcake.bencode.Type;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-public class Main {
-    public static void main(String[] args) throws Exception {
-        if (args.length < 2) {
-            System.out.println("Invalid command or missing arguments");
-            return;
-        }
+class DecodeResult {
+    Object value;
+    int nextIndex;
 
-        String command = args[0];
-
-        if (command.equals("info")) {
-            String filePath = args[1];
-            Torrent torrent = new Torrent(Files.readAllBytes(Path.of(filePath)));
-
-            System.out.println("Tracker URL: " + torrent.announce);
-            System.out.println("Length: " + torrent.length);
-            System.out.println("Info Hash: " + bytesToHex(torrent.infoHash));
-            System.out.println("Piece Length: " + torrent.pieceLength);
-            System.out.println("Piece Hashes:");
-            for (String pieceHash : torrent.pieceHashes) {
-                System.out.println(pieceHash);
-            }
-        } else {
-            System.out.println("Unknown command: " + command);
-        }
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
+    DecodeResult(Object value, int nextIndex) {
+        this.value = value;
+        this.nextIndex = nextIndex;
     }
 }
 
-class Torrent {
-    public String announce;
-    public long length;
-    public byte[] infoHash;
-    public int pieceLength;
-    public List<String> pieceHashes = new ArrayList<>();
+public class BencodeDecoder {
+    public static Gson gson = new Gson();
 
-    public Torrent(byte[] bytes) throws NoSuchAlgorithmException {
-        Bencode bencode = new Bencode(false); // Standard decoder
-        Bencode strictBencode = new Bencode(true); // Strict encoder (preserves ordering)
-
-        // Parse .torrent file
-        Map<String, Object> root = bencode.decode(bytes, Type.DICTIONARY);
-
-        // Extract announce URL and info dictionary
-        announce = (String) root.get("announce");
-        Map<String, Object> info = (Map<String, Object>) root.get("info");
-        length = (long) info.get("length");
-
-        // Extract piece length
-        pieceLength = (int) info.get("piece length");
-
-        // Extract and process pieces (20-byte SHA-1 hashes)
-        byte[] pieces = (byte[]) info.get("pieces");
-        for (int i = 0; i < pieces.length; i += 20) {
-            byte[] pieceHash = new byte[20];
-            System.arraycopy(pieces, i, pieceHash, 0, 20);
-            pieceHashes.add(bytesToHex(pieceHash));
+    static DecodeResult decodeBencodeHelper(String bencodedString, int startIndex) {
+        if (startIndex >= bencodedString.length()) {
+            throw new RuntimeException("Unexpected end of input");
         }
 
-        // Correctly bencode the "info" dictionary before hashing
-        byte[] bencodedInfo = strictBencode.encode(info);
+        char firstChar = bencodedString.charAt(startIndex);
+        if (Character.isDigit(firstChar)) {
+            return decodeString(bencodedString, startIndex);
+        } else if (firstChar == 'i') {
+            return decodeInteger(bencodedString, startIndex);
+        } else if (firstChar == 'l') {
+            return decodeList(bencodedString, startIndex);
+        } else if (firstChar == 'd') {
+            return decodeDictionary(bencodedString, startIndex);
+        } else {
+            throw new RuntimeException("Unsupported type");
+        }
+    }
 
-        // Compute SHA-1 hash of the bencoded "info" dictionary
-        MessageDigest digest = MessageDigest.getInstance("SHA-1");
-        infoHash = digest.digest(bencodedInfo);
+    static DecodeResult decodeString(String bencodedString, int startIndex) {
+        int colonIndex = bencodedString.indexOf(':', startIndex);
+        if (colonIndex == -1) {
+            throw new RuntimeException("Invalid string encoding");
+        }
+        int length = Integer.parseInt(bencodedString.substring(startIndex, colonIndex));
+        String value = bencodedString.substring(colonIndex + 1, colonIndex + 1 + length);
+        return new DecodeResult(value, colonIndex + 1 + length);
+    }
+
+    static DecodeResult decodeInteger(String bencodedString, int startIndex) {
+        int endIndex = bencodedString.indexOf('e', startIndex);
+        if (endIndex == -1) {
+            throw new RuntimeException("Invalid integer encoding");
+        }
+        long value = Long.parseLong(bencodedString.substring(startIndex + 1, endIndex));
+        return new DecodeResult(value, endIndex + 1);
+    }
+
+    static DecodeResult decodeList(String bencodedString, int startIndex) {
+        List<Object> list = new ArrayList<>();
+        int index = startIndex + 1;
+        while (index < bencodedString.length() && bencodedString.charAt(index) != 'e') {
+            DecodeResult result = decodeBencodeHelper(bencodedString, index);
+            list.add(result.value);
+            index = result.nextIndex;
+        }
+        if (index >= bencodedString.length()) {
+            throw new RuntimeException("Unterminated list");
+        }
+        return new DecodeResult(list, index + 1);
+    }
+
+    static DecodeResult decodeDictionary(String bencodedString, int startIndex) {
+        Map<Object, Object> hashMap = new HashMap<>();
+        int index = startIndex + 1;
+        while (index < bencodedString.length() && bencodedString.charAt(index) != 'e') {
+            DecodeResult key = decodeBencodeHelper(bencodedString, index);
+            index = key.nextIndex;
+            DecodeResult value = decodeBencodeHelper(bencodedString, index);
+            index = value.nextIndex;
+            hashMap.put(key.value, value.value);
+        }
+        return new DecodeResult(hashMap, index + 1);
+    }
+
+    static JsonElement decodeBencode(String bencodedString) {
+        return gson.toJsonTree(decodeBencodeHelper(bencodedString, 0).value);
+    }
+
+    static byte[] findInfoHash(byte[] bencodedBytes) {
+        Bencode encoder = new Bencode(true);
+        Map<String, Object> decodedString = encoder.decode(bencodedBytes, Type.DICTIONARY);
+
+        if (!decodedString.containsKey("info")) {
+            throw new RuntimeException("Invalid torrent file: missing 'info' dictionary.");
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> info = (Map<String, Object>) decodedString.get("info");
+
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-1");
+        } catch (NoSuchAlgorithmException e) {
+            System.out.println("Error: " + e);
+            return null;
+        }
+        return digest.digest(encoder.encode(info, Type.DICTIONARY));
+    }
+
+    static List<byte[]> findPiecesHash(byte[] bencodedBytes) {
+        Bencode encoder = new Bencode(true);
+        Map<String, Object> decodedString = encoder.decode(bencodedBytes, Type.DICTIONARY);
+
+        if (!decodedString.containsKey("info")) {
+            throw new RuntimeException("Invalid torrent file: missing 'info' dictionary.");
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> info = (Map<String, Object>) decodedString.get("info");
+
+        if (!info.containsKey("pieces")) {
+            throw new RuntimeException("Invalid torrent file: missing 'pieces' field.");
+        }
+
+        // ✅ Correct extraction of 'pieces' as a byte array
+        String piecesString = (String) info.get("pieces");
+        byte[] pieces = piecesString.getBytes(StandardCharsets.ISO_8859_1);
+
+        List<byte[]> res = new ArrayList<>();
+        for (int i = 0; i < pieces.length; i += 20) {
+            res.add(Arrays.copyOfRange(pieces, i, Math.min(i + 20, pieces.length)));
+        }
+        return res;
     }
 }
