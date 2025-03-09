@@ -22,7 +22,6 @@ public class Main {
 
             System.out.println("Tracker URL: " + torrent.announce);
             System.out.println("Length: " + torrent.length);
-            System.out.println("Bencoded Info (Hex): " + bytesToHex(torrent.bencodedInfo));
             System.out.println("Info Hash: " + bytesToHex(torrent.infoHash));
         } else {
             System.out.println("Unknown command: " + command);
@@ -42,25 +41,21 @@ class Torrent {
     public String announce;
     public long length;
     public byte[] infoHash;
-    public byte[] bencodedInfo; // Store raw bencoded info for debugging
 
     public Torrent(byte[] bytes) throws NoSuchAlgorithmException {
-        Bencode bencode = new Bencode(false);  // Normal decoding
-        Bencode strictBencode = new Bencode(true);  // Strict encoding
+        Bencode bencode = new Bencode(false); // Standard decoder
+        Bencode strictBencode = new Bencode(true); // Strict encoder (preserves ordering)
 
-        // Decode entire .torrent file
+        // Parse .torrent file
         Map<String, Object> root = bencode.decode(bytes, Type.DICTIONARY);
         
-        // Extract "announce" and "info" fields
+        // Extract announce URL and info dictionary
         announce = (String) root.get("announce");
         Map<String, Object> info = (Map<String, Object>) root.get("info");
         length = (long) info.get("length");
 
-        // Encode "info" dictionary exactly as it appears in the file
-        bencodedInfo = strictBencode.encode(info);
-        
-        System.out.println("Extracted 'info' dictionary: " + info);  // Debug: Check extracted info
-        System.out.println("Bencoded 'info' (String): " + new String(bencodedInfo));  // Debug: Check encoding
+        // Correctly bencode the "info" dictionary before hashing
+        byte[] bencodedInfo = strictBencode.encode(info);
 
         // Compute SHA-1 hash of the bencoded "info" dictionary
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
