@@ -43,8 +43,7 @@ class Torrent {
     public byte[] infoHash;
 
     public Torrent(byte[] bytes) throws NoSuchAlgorithmException {
-        Bencode bencode = new Bencode(false);  // Decode normally
-        Bencode strictBencode = new Bencode(true);  // Strict for encoding
+        Bencode bencode = new Bencode();  // Use default settings
 
         Map<String, Object> root = bencode.decode(bytes, Type.DICTIONARY);
         Map<String, Object> info = (Map<String, Object>) root.get("info");
@@ -52,10 +51,8 @@ class Torrent {
         announce = (String) root.get("announce");
         length = (long) info.get("length");
 
-        // Encode the info dictionary exactly as it was
-        byte[] bencodedInfo = strictBencode.encode(info);
-
-        // Compute SHA-1 hash of the bencoded "info" dictionary
+        // Calculate the info hash
+        byte[] bencodedInfo = bencode.encode(info);
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
         infoHash = digest.digest(bencodedInfo);
     }
