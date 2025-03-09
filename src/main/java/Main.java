@@ -43,7 +43,7 @@ class Torrent {
     public byte[] infoHash;
 
     public Torrent(byte[] bytes) throws NoSuchAlgorithmException {
-        Bencode bencode = new Bencode();  // Use default settings
+        Bencode bencode = new Bencode(true);  // Use strict mode for consistent encoding
 
         Map<String, Object> root = bencode.decode(bytes, Type.DICTIONARY);
         Map<String, Object> info = (Map<String, Object>) root.get("info");
@@ -51,9 +51,40 @@ class Torrent {
         announce = (String) root.get("announce");
         length = (long) info.get("length");
 
-        // Calculate the info hash
-        byte[] bencodedInfo = bencode.encode(info);
-        MessageDigest digest = MessageDigest.getInstance("SHA-1");
-        infoHash = digest.digest(bencodedInfo);
+        // Calculate the info hash using the original bytes
+        int startIndex = findInfoStart(bytes);
+        int endIndex = findInfoEnd(bytes, startIndex);
+        
+        if (startIndex >= 0 && endIndex > startIndex) {
+            byte[] infoBytes = new byte[endIndex - startIndex];
+            System.arraycopy(bytes, startIndex, infoBytes, 0, infoBytes.length);
+            
+            MessageDigest digest = MessageDigest.getInstance("SHA-1");
+            infoHash = digest.digest(infoBytes);
+        } else {
+            throw new RuntimeException("Could not find info dictionary in torrent file");
+        }
+    }
+
+    private int findInfoStart(byte[] bytes) {
+        // Find the start of the info dictionary
+        String content = new String(bytes);
+        return content.indexOf("4:info") + 6; // Skip "4:info" to get to the dictionary start
+    }
+
+    private int findInfoEnd(byte[] bytes, int startIndex) {
+        // Find the end of the info dictionary by counting nested dictionaries
+        int depth = 1;
+        for (int i = startIndex; i < bytes.length; i++) {
+            if (bytes[i] == 'd') {
+                depth++;
+            } else if (bytes[i] == 'e') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 }
