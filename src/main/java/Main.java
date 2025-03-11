@@ -142,16 +142,19 @@ public class Main {
         byte[] peerBytes = peersData.getBytes(StandardCharsets.ISO_8859_1);
         
         // Each peer entry is exactly 6 bytes (4 for IP, 2 for port)
-        // Make sure we only process complete peer entries
         int numPeers = peerBytes.length / 6;
         for (int i = 0; i < numPeers * 6; i += 6) {
+            // Get IP address - bytes are already in correct order
             String ip = String.format("%d.%d.%d.%d",
                 peerBytes[i] & 0xFF,
                 peerBytes[i + 1] & 0xFF,
                 peerBytes[i + 2] & 0xFF,
                 peerBytes[i + 3] & 0xFF
             );
-            int port = ((peerBytes[i + 4] & 0xFF) << 8) | (peerBytes[i + 5] & 0xFF);
+            
+            // Get port - convert from big-endian bytes to int
+            int port = (((peerBytes[i + 4] & 0xFF) << 8) | (peerBytes[i + 5] & 0xFF));
+            
             peers.add(new Peer(ip, port));
         }
         return peers;
