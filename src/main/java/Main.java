@@ -64,7 +64,9 @@ public class Main {
     private static List<String> parsePieces(byte[] pieces) {
         List<String> piecesHash = new ArrayList<>();
         for (int i = 0; i < pieces.length; i += 20) {
-            piecesHash.add(Hex.encodeHexString(pieces, i, 20));
+            byte[] hash = new byte[20];
+            System.arraycopy(pieces, i, hash, 0, 20);
+            piecesHash.add(bytesToHex(hash));
         }
         return piecesHash;
     }
@@ -73,7 +75,16 @@ public class Main {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         encodeBencode(infoMap, byteArrayOutputStream);
         byte[] infoBytes = byteArrayOutputStream.toByteArray();
-        return DigestUtils.sha1Hex(infoBytes);
+        MessageDigest digest = MessageDigest.getInstance("SHA-1");
+        return bytesToHex(digest.digest(infoBytes));
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder result = new StringBuilder();
+        for (byte b : bytes) {
+            result.append(String.format("%02x", b));
+        }
+        return result.toString();
     }
 
     private static void encodeBencode(Object object, ByteArrayOutputStream out) throws IOException {
@@ -154,6 +165,17 @@ public class Main {
         byte[] strData = new byte[length];
         input.read(strData);
         return new String(strData, StandardCharsets.UTF_8);
+    }
+
+    private static List<?> parseList(ByteArrayInputStream input) throws IOException {
+        List<Object> list = new ArrayList<>();
+        input.mark(0);
+        while ((char) input.read() != 'e') {
+            input.reset();
+            list.add(decodeBencode(input));
+            input.mark(0);
+        }
+        return list;
     }
 
     private static String extractTillChar(ByteArrayInputStream input, char end) {
