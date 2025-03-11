@@ -12,9 +12,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
 
 public class Main {
     private static final Gson gson = new Gson();
+    private static final String PEER_ID = "-PC0001-123456789012"; // 20 bytes peer id
 
     public static void main(String[] args) throws Exception {
         System.err.println("Logs from your program will appear here!");
@@ -30,6 +35,9 @@ public class Main {
             }
         } else if ("info".equals(command)) {
             processTorrentFile(args[1]);
+        } else if (command.equals("peers")) {
+            String torrentPath = args[1];
+            getPeers(torrentPath);
         } else {
             System.out.println("Unknown command: " + command);
         }
@@ -57,6 +65,101 @@ public class Main {
         System.out.println("Piece Length: " + pieceLength);
         System.out.println("Piece Hashes:");
         System.out.println(String.join("\n", piecesHash));
+    }
+
+    private static void getPeers(String torrentPath) throws Exception {
+        byte[] torrentFileContents = Files.readAllBytes(Path.of(torrentPath));
+        Map<?, ?> decodedResult = (Map<?, ?>) decodeBencode(new ByteArrayInputStream(torrentFileContents));
+        
+        String announceUrl = (String) decodedResult.get("announce");
+        Map<?, ?> info = (Map<?, ?>) decodedResult.get("info");
+        long fileLength = (long) info.get("length");
+        
+        // Get raw info hash (20 bytes)
+        byte[] infoHash = getInfoHash(info);
+        
+        // Build tracker URL with parameters
+        String trackerUrl = buildTrackerUrl(announceUrl, infoHash, fileLength);
+        
+        // Make HTTP GET request
+        byte[] response = makeGetRequest(trackerUrl);
+        
+        // Decode and parse response
+        Map<?, ?> trackerResponse = (Map<?, ?>) decodeBencode(new ByteArrayInputStream(response));
+        String peersData = (String) trackerResponse.get("peers");
+        
+        // Parse peers
+        List<Peer> peers = parsePeers(peersData);
+        
+        // Print results
+        for (Peer peer : peers) {
+            System.out.println(peer.toString());
+        }
+    }
+
+    private static String buildTrackerUrl(String announceUrl, byte[] infoHash, long fileLength) 
+            throws UnsupportedEncodingException {
+        StringBuilder url = new StringBuilder(announceUrl);
+        url.append("?info_hash=").append(urlEncodeBytes(infoHash));
+        url.append("&peer_id=").append(URLEncoder.encode(PEER_ID, "UTF-8"));
+        url.append("&port=6881");
+        url.append("&uploaded=0");
+        url.append("&downloaded=0");
+        url.append("&left=").append(fileLength);
+        url.append("&compact=1");
+        return url.toString();
+    }
+
+    private static String urlEncodeBytes(byte[] bytes) throws UnsupportedEncodingException {
+        StringBuilder encoded = new StringBuilder();
+        for (byte b : bytes) {
+            encoded.append('%').append(String.format("%02X", b));
+        }
+        return encoded.toString();
+    }
+
+    private static byte[] makeGetRequest(String urlStr) throws IOException {
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("GET");
+        
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            try (var in = conn.getInputStream()) {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+            }
+            return out.toByteArray();
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private static List<Peer> parsePeers(String peersData) {
+        List<Peer> peers = new ArrayList<>();
+        byte[] peerBytes = peersData.getBytes(StandardCharsets.ISO_8859_1);
+        
+        for (int i = 0; i < peerBytes.length; i += 6) {
+            String ip = String.format("%d.%d.%d.%d",
+                peerBytes[i] & 0xFF,
+                peerBytes[i + 1] & 0xFF,
+                peerBytes[i + 2] & 0xFF,
+                peerBytes[i + 3] & 0xFF
+            );
+            int port = ((peerBytes[i + 4] & 0xFF) << 8) | (peerBytes[i + 5] & 0xFF);
+            peers.add(new Peer(ip, port));
+        }
+        return peers;
+    }
+
+    private static byte[] getInfoHash(Map<?, ?> info) throws IOException, NoSuchAlgorithmException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        encodeBencode(info, byteArrayOutputStream);
+        byte[] infoBytes = byteArrayOutputStream.toByteArray();
+        MessageDigest digest = MessageDigest.getInstance("SHA-1");
+        return digest.digest(infoBytes);
     }
 
     private static List<String> parsePieces(byte[] pieces) {
@@ -199,5 +302,20 @@ public class Main {
         byte[] bytes = new byte[Integer.parseInt(extractTillChar(input, ':'))];
         input.read(bytes);
         return bytes;
+    }
+}
+
+class Peer {
+    private final String ip;
+    private final int port;
+
+    public Peer(String ip, int port) {
+        this.ip = ip;
+        this.port = port;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("%s:%d", ip, port);
     }
 }
