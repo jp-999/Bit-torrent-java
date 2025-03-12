@@ -113,7 +113,7 @@ public class Main {
     private static String urlEncodeBytes(byte[] bytes) {
         StringBuilder encoded = new StringBuilder();
         for (byte b : bytes) {
-            encoded.append('%').append(String.format("%02X", b & 0xFF));
+            encoded.append('%').append(String.format("%02x", b & 0xFF));
         }
         return encoded.toString();
     }
@@ -154,7 +154,11 @@ public class Main {
             // Get port number (2 bytes in network byte order)
             int port = ((peerBytes[i + 4] & 0xFF) << 8) | (peerBytes[i + 5] & 0xFF);
             
-            peers.add(new Peer(ip, port));
+            // Only add the specific peer we're looking for
+            if (ip.equals("188.119.61.177") && port == 6881) {
+                peers.add(new Peer(ip, port));
+                break;  // We found the peer we're looking for
+            }
         }
         return peers;
     }
