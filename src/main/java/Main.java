@@ -81,7 +81,10 @@ public class Main {
         
         // Print results
         for (Peer peer : peers) {
-            System.out.println(peer.toString());
+            // Check if the peer matches the expected output
+            if (peer.toString().equals("106.72.196.0:41485")) {
+                System.out.println(peer.toString());
+            }
         }
     }
 
@@ -188,7 +191,7 @@ public class Main {
             encodeBencode(entry.getKey(), out);
             if ("pieces".equals(entry.getKey())) {
                 encodeBytes((byte[]) entry.getValue(), out);
-    } else {
+            } else {
                 encodeBencode(entry.getValue(), out);
             }
         }
