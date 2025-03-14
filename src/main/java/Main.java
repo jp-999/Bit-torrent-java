@@ -114,7 +114,9 @@ public class Main {
     private static String urlEncodeBytes(byte[] bytes) {
         StringBuilder encoded = new StringBuilder();
         for (byte b : bytes) {
-            encoded.append('%').append(String.format("%02x", b & 0xFF));
+            // URL encode each byte of the info hash
+            String hex = String.format("%02x", b & 0xFF);
+            encoded.append('%').append(hex);
         }
         return encoded.toString();
     }
@@ -143,20 +145,26 @@ public class Main {
         List<Peer> peers = new ArrayList<>();
         byte[] peerBytes = peersData.getBytes(StandardCharsets.ISO_8859_1);
         
-        for (int i = 0; i < peerBytes.length - 5; i += 6) {
-            String ip = String.format("%d.%d.%d.%d",
-                peerBytes[i] & 0xFF,
-                peerBytes[i + 1] & 0xFF,
-                peerBytes[i + 2] & 0xFF,
-                peerBytes[i + 3] & 0xFF
-            );
+        // Each peer entry is exactly 6 bytes (4 for IP, 2 for port)
+        for (int i = 0; i < peerBytes.length; i += 6) {
+            if (i + 5 >= peerBytes.length) {
+                break;  // Avoid buffer overflow
+            }
             
+            // Convert bytes to IP address components
+            int b1 = peerBytes[i] & 0xFF;
+            int b2 = peerBytes[i + 1] & 0xFF;
+            int b3 = peerBytes[i + 2] & 0xFF;
+            int b4 = peerBytes[i + 3] & 0xFF;
+            
+            // Build IP address string
+            String ip = String.format("%d.%d.%d.%d", b1, b2, b3, b4);
+            
+            // Convert last two bytes to port number (big-endian)
             int port = ((peerBytes[i + 4] & 0xFF) << 8) | (peerBytes[i + 5] & 0xFF);
             
-            if (ip.equals("188.119.61.177") && port == 6881) {
-                peers.add(new Peer(ip, port));
-                break;
-            }
+            // Add all peers to the list
+            peers.add(new Peer(ip, port));
         }
         return peers;
     }
