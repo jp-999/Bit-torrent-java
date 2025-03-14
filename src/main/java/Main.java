@@ -75,23 +75,21 @@ public class Main {
         Map<?, ?> info = (Map<?, ?>) decodedResult.get("info");
         long fileLength = (long) info.get("length");
         
-        // Get raw info hash (20 bytes)
         byte[] infoHash = getInfoHash(info);
-        
-        // Build tracker URL with parameters
         String trackerUrl = buildTrackerUrl(announceUrl, infoHash, fileLength);
-        
-        // Make HTTP GET request
         byte[] response = makeGetRequest(trackerUrl);
         
-        // Decode and parse response
         Map<?, ?> trackerResponse = (Map<?, ?>) decodeBencode(new ByteArrayInputStream(response));
         String peersData = (String) trackerResponse.get("peers");
         
-        // Parse peers
         List<Peer> peers = parsePeers(peersData);
         
-        // Print results
+        peers.sort((a, b) -> {
+            int ipCompare = a.toString().compareTo(b.toString());
+            if (ipCompare != 0) return ipCompare;
+            return Integer.compare(a.getPort(), b.getPort());
+        });
+        
         for (Peer peer : peers) {
             System.out.println(peer.toString());
         }
@@ -114,7 +112,6 @@ public class Main {
     private static String urlEncodeBytes(byte[] bytes) {
         StringBuilder encoded = new StringBuilder();
         for (byte b : bytes) {
-            // URL encode each byte of the info hash
             String hex = String.format("%02x", b & 0xFF);
             encoded.append('%').append(hex);
         }
@@ -143,28 +140,19 @@ public class Main {
 
     private static List<Peer> parsePeers(String peersData) {
         List<Peer> peers = new ArrayList<>();
-        // Get raw bytes from the peers data
         byte[] peerBytes = peersData.getBytes(StandardCharsets.ISO_8859_1);
         
-        // Process each peer entry (6 bytes each)
-        for (int i = 0; i < peerBytes.length; i += 6) {
-            if (i + 5 >= peerBytes.length) {
-                break;  // Avoid buffer overflow
-            }
+        int numPeers = peerBytes.length / 6;
+        for (int i = 0; i < numPeers * 6; i += 6) {
+            String ip = String.format("%d.%d.%d.%d",
+                (peerBytes[i] & 0xFF),
+                (peerBytes[i + 1] & 0xFF),
+                (peerBytes[i + 2] & 0xFF),
+                (peerBytes[i + 3] & 0xFF)
+            );
             
-            // Convert bytes to IP address components
-            int b1 = peerBytes[i] & 0xFF;
-            int b2 = peerBytes[i + 1] & 0xFF;
-            int b3 = peerBytes[i + 2] & 0xFF;
-            int b4 = peerBytes[i + 3] & 0xFF;
-            
-            // Build IP address string
-            String ip = String.format("%d.%d.%d.%d", b1, b2, b3, b4);
-            
-            // Convert last two bytes to port number (big-endian)
             int port = ((peerBytes[i + 4] & 0xFF) << 8) | (peerBytes[i + 5] & 0xFF);
             
-            // Add all peers to the list
             peers.add(new Peer(ip, port));
         }
         return peers;
@@ -328,6 +316,10 @@ class Peer {
     public Peer(String ip, int port) {
         this.ip = ip;
         this.port = port;
+    }
+
+    public int getPort() {
+        return port;
     }
 
     @Override
