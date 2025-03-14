@@ -11,36 +11,34 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 
 public class Main {
-  private static final Gson gson = new Gson();
+    private static final Gson gson = new Gson();
     private static final String PEER_ID = "-PC0001-123456789012"; // 20 bytes peer id
 
-  public static void main(String[] args) throws Exception {
-    System.err.println("Logs from your program will appear here!");
+    public static void main(String[] args) throws Exception {
         String command = args[0];
-    
+
         if ("decode".equals(command)) {
-       String bencodedValue = args[1];
-       try {
+            String bencodedValue = args[1];
+            try {
                 String decoded = gson.toJson(decodeBencode(new ByteArrayInputStream(bencodedValue.getBytes())));
                 System.out.println(decoded);
             } catch (RuntimeException e) {
-         System.out.println(e.getMessage());
+                System.out.println(e.getMessage());
             }
         } else if ("info".equals(command)) {
             processTorrentFile(args[1]);
-        } else if (command.equals("peers")) {
+        } else if ("peers".equals(command)) {
             String torrentPath = args[1];
             getPeers(torrentPath);
-    } else {
-      System.out.println("Unknown command: " + command);
-    }
+        } else {
+            System.out.println("Unknown command: " + command);
+        }
     }
 
     private static void processTorrentFile(String torrentFile) throws IOException, NoSuchAlgorithmException {
@@ -49,22 +47,12 @@ public class Main {
         String announceString = (String) decodedResult.get("announce");
         Map<?, ?> infoMap = (Map<?, ?>) decodedResult.get("info");
 
-        Number length = (infoMap.get("length") instanceof Integer)
-                ? ((Integer) infoMap.get("length")).longValue()
-                : (Number) infoMap.get("length");
-
-        Long pieceLength = (Long) infoMap.get("piece length");
-        byte[] pieces = (byte[]) infoMap.get("pieces");
-        List<String> piecesHash = parsePieces(pieces);
-
-        String torrentSha = calculateInfoHash(infoMap);
+        long length = (long) infoMap.get("length");
+        byte[] infoHash = getInfoHash(infoMap);
 
         System.out.println("Tracker URL: " + announceString);
         System.out.println("Length: " + length);
-        System.out.println("Info Hash: " + torrentSha);
-        System.out.println("Piece Length: " + pieceLength);
-        System.out.println("Piece Hashes:");
-        System.out.println(String.join("\n", piecesHash));
+        System.out.println("Info Hash: " + bytesToHex(infoHash));
     }
 
     private static void getPeers(String torrentPath) throws Exception {
@@ -107,7 +95,6 @@ public class Main {
         url.append("&downloaded=0");
         url.append("&left=").append(fileLength);
         url.append("&compact=1");
-        url.append("&event=started");
         return url.toString();
     }
 
@@ -175,24 +162,6 @@ public class Main {
         byte[] infoBytes = byteArrayOutputStream.toByteArray();
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
         return digest.digest(infoBytes);
-    }
-
-    private static List<String> parsePieces(byte[] pieces) {
-        List<String> piecesHash = new ArrayList<>();
-        for (int i = 0; i < pieces.length; i += 20) {
-            byte[] hash = new byte[20];
-            System.arraycopy(pieces, i, hash, 0, 20);
-            piecesHash.add(bytesToHex(hash));
-        }
-        return piecesHash;
-    }
-
-    private static String calculateInfoHash(Map<?, ?> infoMap) throws NoSuchAlgorithmException, IOException {
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        encodeBencode(infoMap, byteArrayOutputStream);
-        byte[] infoBytes = byteArrayOutputStream.toByteArray();
-        MessageDigest digest = MessageDigest.getInstance("SHA-1");
-        return bytesToHex(digest.digest(infoBytes));
     }
 
     private static String bytesToHex(byte[] bytes) {
@@ -327,10 +296,6 @@ class Peer {
     public Peer(String ip, int port) {
         this.ip = ip;
         this.port = port;
-    }
-
-    public int getPort() {
-        return port;
     }
 
     @Override
